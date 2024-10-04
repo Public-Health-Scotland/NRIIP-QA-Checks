@@ -1,0 +1,5 @@
+request_id,patient_id,chi_number,surname,forename,date_of_birth,postcode,gender,requesting_clinican_id,requesting_clinician_surname,requesting_clinician_forename,requesting_source_code,requesting_source_description,requesting_health_code,requesting_health_description,requesting_location_code,requestimg_location_description,requesting_clinician_specialty_code,requesting_department,request_received_date,request_received_time,patient_type_code,patient_type_description,clinical_indications,request_status_code,request_status_description
+11283090,439483,2308632674,Parker,Michael,19630824,KA25 7HZ,Male,RODLI02,Lisa Rodgers (Cons),Lisa Rodgers (Cons),1,NHS,S08000016,Borders,,,C12,Ward 5E Medical Day Unit,20240720,33060,O,OP,"NMR protocol 7
+Extended right hemi 08/2022- recurrent disease- Currently on immunotherapy - please assess response to treatment - 3 months of treatment. Has chest portacath insitu. Please do wc 26/8/24 
+ 
+",36,Authorised
