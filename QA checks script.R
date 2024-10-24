@@ -59,38 +59,47 @@ writeData(wb, "blanks_checks",
           x = check_1, startRow = 5)
 
 
-#EM NEEDS HELP!! Check Column O or N(Request health desc/Request health code) Requesting health board code) do not contain any rogue information
-#REVIEW - Is there a way to check against the PHS List/phsmethods? Think it only works for HB codes, but could find list from National Ref Files
+# Check Column O or N(Request health desc/Request health code) Requesting health board code) do not contain any rogue information
+#Creating HB code list & separate list for HB desc
 
 hb_code_list = c("S08000015", "S08000016", "S08000017", "S08000018","S08000019", "S08000020", "S08000021","S08000022","S08000023", "S08000024",
                  "S08000025", "S08000026", "S08000027", "S08000028","S08000001", "S08000008")
-hb_code_desc = c("Ayrshire and Arran", "Borders","Dumfries and Galloway", "Fife", "Forth Valley", "Grampian", "Greater Glasgow and Clyde", 
+hb_code_desc = c("Ayrshire and Arran", "Borders","Dumfries and Galloway", "Fife", "Forth Valley", "Grampian", "Greater Glasgow and Clyde",
                  "Highland", "Lanarkshire", "Lothian", "Orkney", "Shetland", "Tayside","Western Isles", "Golden Jubilee Hospital",
                  "The State Hospital")
 
 # if not in col 0 (requesting health code ) then take row out and save it
 
-#dyplr for inside dataframe 
+#dyplr for inside dataframe
+install.packages("phsopendata")
 library(phsopendata)
 
+#Filtering HB codes that are not in the hb code list
 check_2 <- output |> filter(!requesting_health_code %in% hb_code_list)
 # Read in hospital codes from opendata
-# Al;ways takes the latest version of the reference file 
+# Always takes the latest version of the reference file
 hospital_codes <- get_resource("c698f450-eeed-41a0-88f7-c1e40a568acc")
 
-check_2_match <- check_2 |> 
-  left_join(hospital_codes |> 
-              select(requesting_health_code = HospitalCode, HealthBoard_new = HealthBoard)) |> 
+
+check_2_match <- check_2 |>
+  #left join hosp codes from opendata to  our df
+  left_join(hospital_codes |>
+              #renaming column names in opendata file to match
+              select(requesting_health_code = HospitalCode, HealthBoard_new = HealthBoard)) |>
+  #distinct names means each code/hb must be unique
   distinct(requesting_health_code, HealthBoard_new)
 
-
-output2 <- output |> 
-  left_join(check_2_match) |> 
+#For codes that don't match, add column with HB Codes matching on from opendata file
+output2 <- output |>
+  left_join(check_2_match) |>
+  # Creating new column. When code matches opendata source, in the new column when it is NA leave the code we have.
+  #If it's not N/A take the new code
   mutate(requesting_health_code = case_when(
     is.na(HealthBoard_new) ~ requesting_health_code,
     TRUE ~ HealthBoard_new
   ))
-after_care <- output2 |> 
+#filtering for true rogue information in column
+after_care <- output2 |>
   filter(!requesting_health_code %in% hb_code_list)
 addWorksheet(wb, "Rogue_information")
 
@@ -103,11 +112,11 @@ writeData(wb, "Rogue_information",
 
 hb_code_list as.character(unique(output$requesting_health_code)) ~
   if (hb_code_list != requesting_health_code)
-    
+
     #write.xlsx(check_2, file = "/PHI_conf/diag_radiology/Data Submissions/Radiology - to be uploaded/A&A/ERROR2_RADIOLOGY_MASTER_A_202410004.csv",
-    #               rowNames=FALSE,colNames=FALSE,sep=",",na="",quote=TRUE)   
-    
-    
+    #               rowNames=FALSE,colNames=FALSE,sep=",",na="",quote=TRUE)
+
+
     #Date Format Checks
     #I'm still playing about with this
     date_check <- output |>
