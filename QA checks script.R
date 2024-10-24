@@ -101,13 +101,22 @@ output2 <- output |>
 #filtering for true rogue information in column
 after_care <- output2 |>
   filter(!requesting_health_code %in% hb_code_list)
+
+#add work sheet 
 addWorksheet(wb, "Rogue_information")
 
 writeData(wb, "Rogue_information",
           paste0("Check Column O or N(Request health desc/Request health code) Requesting health board code) do not contain any rogue information"))
 
 writeData(wb, "Rogue_information",
-          x = check_2, skip = 5)
+          x = after_care, startRow = 5)
+
+#
+
+
+
+
+
 
 
 hb_code_list as.character(unique(output$requesting_health_code)) ~
