@@ -71,7 +71,6 @@ hb_code_desc = c("Ayrshire and Arran", "Borders","Dumfries and Galloway", "Fife"
 # if not in col 0 (requesting health code ) then take row out and save it
 
 #dyplr for inside dataframe
-install.packages("phsopendata")
 library(phsopendata)
 
 #Filtering HB codes that are not in the hb code list
@@ -107,48 +106,60 @@ writeData(wb, "Rogue_information",
           paste0("Check Column O or N(Request health desc/Request health code) Requesting health board code) do not contain any rogue information"))
 
 writeData(wb, "Rogue_information",
-          x = check_2, skip = 5)
-
-
-hb_code_list as.character(unique(output$requesting_health_code)) ~
-  if (hb_code_list != requesting_health_code)
-
-    #write.xlsx(check_2, file = "/PHI_conf/diag_radiology/Data Submissions/Radiology - to be uploaded/A&A/ERROR2_RADIOLOGY_MASTER_A_202410004.csv",
-    #               rowNames=FALSE,colNames=FALSE,sep=",",na="",quote=TRUE)
-
-
-    #Date Format Checks
-    #I'm still playing about with this
-    date_check <- output |>
-  mutate(request_received_date),
-~format(.x, "%Y%m%d")
-
-
-~format(.x, "%Y%m%d"))
-as.Date('1/15/2001',format='%m/%d/%Y')
-
-?data.table
-#Time Checks
-
-# create a header
-# unsure of HB cypher/today/increment
-fwrite(data.table(t(c("RADIOLOGY","REQUEST",health_board_cypher, today, "1", n))),
-       paste0(output, "EIC_", health_board, "_DATA_", today, "_1.csv"),
-       append = FALSE, col.names = FALSE)
-
-# save out file
-fwrite(save_data, paste0(output, "RADIOLOGY_REQUEST", health_board_cypher, today,".csv"),
-       append = TRUE, col.names = TRUE, row.names = FALSE, na = '')
-}
-
-ok
+          x = after_care, startRow = 5)
 
 
 
 
-###########################
+#Filtering HB codes that are not in the hb code list
+check_3 <- output |> filter(!requesting_health_description %in% hb_code_desc)
 
-# Save the workbook
+# Read in hospital codes from opendata
+# Always takes the latest version of the reference file
 
-saveWorkbook(wb, paste0("/PHI_conf/diag_radiology/Data Submissions/Radiology - to be uploaded/A&A/", "ERROR_RADIOLOGY_MASTER_A_", date1,
-                        ".xlsx"))
+check_3_match <- check_3 |>
+  #left join hosp codes from opendata to  our df
+  left_join(hospital_codes |>
+              #renaming column names in opendata file to match
+              select(requesting_health_description = HospitalName, HealthBoard_desc_new = HealthBoard)) |>
+  #distinct names means each code/hb must be unique
+  distinct(requesting_health_description, HealthBoard_desc_new)
+
+#EM inserted step still not right - Need another step to convert hb codes in column N into to hb desc. Need to add another table don't have a list stating 15=A&A so we need to do this)
+#Converting HB code to HB Name
+hospital_desc <- get_resource("652ff726-e676-4a20-abda-435b98dd7bdc")
+converting_desc_match <- check_3 |>
+  left_join(hospital_desc |>
+              select(requesting_health_description = HB, HealthBoard_desc_convert = HBName)) |>
+  #distinct names means each code/hb must be unique
+  distinct(requesting_health_description, HealthBoard_desc_convert)
+
+
+#For codes that don't match, add column with HB Codes matching on from opendata file
+output3 <- output |>
+  left_join(check_3_match) |>
+  # Creating new column. When code matches opendata source, in the new column when it is NA leave the code we have.
+  #If it's not N/A take the new code
+  mutate(requesting_health_description = case_when(
+    is.na(HealthBoard_desc_new) ~ requesting_health_description,
+    TRUE ~ HealthBoard_desc_new))
+
+    #filtering for true rogue information in column
+    after_care_desc <- output3 |>
+    filter(!requesting_health_description %in% hb_code_desc)
+  addWorksheet(wb, "Rogue_information_desc")
+
+  writeData(wb, "Rogue_information_desc",
+            paste0("Check Column N (Request health desc)do not contain any rogue information"))
+
+  writeData(wb, "Rogue_information_desc",
+            x = after_care_desc, startRow = 5)
+
+
+
+  ###########################
+
+  # Save the workbook
+
+  saveWorkbook(wb, paste0("/PHI_conf/diag_radiology/Data Submissions/Radiology - to be uploaded/A&A/", "ERROR_RADIOLOGY_MASTER_A_", date1,
+                          ".xlsx"))
