@@ -71,7 +71,6 @@ hb_code_desc = c("Ayrshire and Arran", "Borders","Dumfries and Galloway", "Fife"
 # if not in col 0 (requesting health code ) then take row out and save it
 
 #dyplr for inside dataframe
-install.packages("phsopendata")
 library(phsopendata)
 
 #Filtering HB codes that are not in the hb code list
