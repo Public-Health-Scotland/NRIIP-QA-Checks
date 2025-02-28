@@ -1,3 +1,30 @@
+# -	Move file manually in the actual folders 
+# 
+# CHECKS
+# REQUESTS
+# -	Check request file for blank in column O (request health descry) and N (Requesting healthboard name) , if blank requesting location code
+# -	Dates format checks 
+# -	Times check  
+# -	Check against previous to check number of rows 
+# -	Request ID no blanks
+# -	Request ID no dups 
+# -	Count n of rows for header
+# -	Check against previous submission increment and add plus 1 
+# -	Save as today’s date and new format 
+# -	Clean column X ( clinical indications ) Remove all nonprintable characters from text 
+# 
+# MASTER
+# -	Unique master ID 
+# -	NO BLANKS – Modality code / description, Room ID (check for room id blanks and booked statuts) , Exam healthboard code, Exam healthboard description, Exam Location Code, Exam location description 
+# -	Date checks 
+# -	Time checks 
+# -	If exam start date is blank use exam end date to populate 
+# -	Check against previous to check number of rows
+# -	save the new file properly 
+# 
+# 
+# write code on checkes for all healthbo
+
 #### NRIIP DQ CHECKS #####
 #### SCRIPT COPYRIGHT ####
 ### AUTHORS :; EILISH MACKINNON & GABRY NAVARRO ###
@@ -19,6 +46,8 @@ library(data.table)
 library(openxlsx)
 library(purrr)
 library(arrow)
+library(phsopendata)
+
 
 error_path <- "/PHI_conf/diag_radiology/Data Submissions/Radiology - to be uploaded/A&A"
 
@@ -68,11 +97,8 @@ hb_code_desc = c("Ayrshire and Arran", "Borders","Dumfries and Galloway", "Fife"
                  "Highland", "Lanarkshire", "Lothian", "Orkney", "Shetland", "Tayside","Western Isles", "Golden Jubilee Hospital",
                  "The State Hospital")
 
+
 # if not in col 0 (requesting health code ) then take row out and save it
-
-#dyplr for inside dataframe
-library(phsopendata)
-
 #Filtering HB codes that are not in the hb code list
 check_2 <- output |> filter(!requesting_health_code %in% hb_code_list)
 # Read in hospital codes from opendata
@@ -97,9 +123,16 @@ output2 <- output |>
     is.na(HealthBoard_new) ~ requesting_health_code,
     TRUE ~ HealthBoard_new
   ))
-#filtering for true rogue information in column
+#filtering for true rogue information in column 
 after_care <- output2 |>
   filter(!requesting_health_code %in% hb_code_list)
+
+# substituting old GGC code to new one and changing location codes to HB codes 
+after_care_1 <- after_care |> 
+  mutate(requesting_health_code = ifelse(requesting_health_code == "S08000031", "S08000021", requesting_health_code)) |> 
+  mutate(requesting_health_code = ifelse(requesting_health_code == "A227V", "S08000015", requesting_health_code)) |> 
+  mutate(requesting_health_code = ifelse(requesting_health_code == "S226H", "S08000024", requesting_health_code)) |> 
+  filter(!requesting_health_code %in% hb_code_list) 
 
 #add work sheet 
 addWorksheet(wb, "Rogue_information")
@@ -110,33 +143,27 @@ writeData(wb, "Rogue_information",
 writeData(wb, "Rogue_information",
           x = after_care, startRow = 5)
 
-#
+#write.xlsx(check_2, file = "/PHI_conf/diag_radiology/Data Submissions/Radiology - to be uploaded/A&A/ERROR2_RADIOLOGY_MASTER_A_202410004.csv",
+#               rowNames=FALSE,colNames=FALSE,sep=",",na="",quote=TRUE)
+
+
+# convert dates from nubmber to dates, idetify issues and then convert back to numbers 
+# Convert the column to Date format with the specified format
 
 
 
+#Date Format, this will not check for errros but will convert dates to what we want.
+#If we want checks this is not good 
 
+date_check2 <- output |> 
+  mutate(request_received_date = ymd(request_received_date)) |> 
+  mutate(request_received_date = gsub("-", "", date_check1$request_received_date))
 
-
-
-hb_code_list as.character(unique(output$requesting_health_code)) ~
-  if (hb_code_list != requesting_health_code)
-
-    #write.xlsx(check_2, file = "/PHI_conf/diag_radiology/Data Submissions/Radiology - to be uploaded/A&A/ERROR2_RADIOLOGY_MASTER_A_202410004.csv",
-    #               rowNames=FALSE,colNames=FALSE,sep=",",na="",quote=TRUE)
-
-
-    #Date Format Checks
-    #I'm still playing about with this
-    date_check <- output |>
-  mutate(request_received_date),
-~format(.x, "%Y%m%d")
-
-
-~format(.x, "%Y%m%d"))
-as.Date('1/15/2001',format='%m/%d/%Y')
-
-?data.table
 #Time Checks
+
+time_check <- date_check2 |> 
+  mutate(request_received_time = format(request_received_time, "%H: %M: %S"))
+
 
 # create a header
 # unsure of HB cypher/today/increment
@@ -147,14 +174,8 @@ fwrite(data.table(t(c("RADIOLOGY","REQUEST",health_board_cypher, today, "1", n))
 # save out file
 fwrite(save_data, paste0(output, "RADIOLOGY_REQUEST", health_board_cypher, today,".csv"),
        append = TRUE, col.names = TRUE, row.names = FALSE, na = '')
-}
 
-ok
-
-
-
-
-###########################
+##########################
 
 # Save the workbook
 
