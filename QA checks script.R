@@ -49,12 +49,12 @@ library(arrow)
 library(phsopendata)
 
 
-error_path <- "/PHI_conf/diag_radiology/Data Submissions/Radiology - to be uploaded/A&A"
+error_path <- "/PHI_conf/diag_radiology/Data Submissions/Radiology - to be uploaded/A&A/"
 
 # Read in csv
 output <- read_csv("/PHI_conf/diag_radiology/Data Submissions/Radiology - to be uploaded/A&A/gabry_eilish.csv", skip = 1)
 output <- clean_names(output)
-View(output)
+
 
 # Todays date
 
@@ -65,15 +65,15 @@ wb = createWorkbook()
 
 
 # Check for blanks in column O OR N(Request_health_desc/Requesting_health_code) to ensure that there are no blanks.
-check_1 <- output |>
+check_blanks <- output |>
   filter(is.na(requesting_health_description) | is.na(requesting_health_code)) |>
   # Match health board name onto code
   mutate(requesting_health_description = case_when(
     !is.na(requesting_health_code) & is.na(requesting_health_description) ~
       match_area(requesting_health_code)
   ))
-#If blanks still remain, move these to a separate file
 
+#If blanks still remain, move these to a separate file
 # Add a worksheet to the workbook
 
 addWorksheet(wb, "blanks_checks")
@@ -85,7 +85,7 @@ writeData(wb, "blanks_checks",
           paste0("checking for blanks in column O and N, and saving out blanks"))
 
 writeData(wb, "blanks_checks",
-          x = check_1, startRow = 5)
+          x = check_blanks, startRow = 5)
 
 
 # Check Column O or N(Request health desc/Request health code) Requesting health board code) do not contain any rogue information
@@ -100,13 +100,13 @@ hb_code_desc = c("Ayrshire and Arran", "Borders","Dumfries and Galloway", "Fife"
 
 # if not in col 0 (requesting health code ) then take row out and save it
 #Filtering HB codes that are not in the hb code list
-check_2 <- output |> filter(!requesting_health_code %in% hb_code_list)
+check_hb_name <- output |> filter(!requesting_health_code %in% hb_code_list)
 # Read in hospital codes from opendata
 # Always takes the latest version of the reference file
 hospital_codes <- get_resource("c698f450-eeed-41a0-88f7-c1e40a568acc")
 
 
-check_2_match <- check_2 |>
+hospital_code_join <- check_hb_name |>
   #left join hosp codes from opendata to  our df
   left_join(hospital_codes |>
               #renaming column names in opendata file to match
@@ -115,20 +115,27 @@ check_2_match <- check_2 |>
   distinct(requesting_health_code, HealthBoard_new)
 
 #For codes that don't match, add column with HB Codes matching on from opendata file
-output2 <- output |>
-  left_join(check_2_match) |>
+output <- output |>
+  left_join(hospital_code_join) |>
   # Creating new column. When code matches opendata source, in the new column when it is NA leave the code we have.
   #If it's not N/A take the new code
   mutate(requesting_health_code = case_when(
     is.na(HealthBoard_new) ~ requesting_health_code,
     TRUE ~ HealthBoard_new
   ))
-#filtering for true rogue information in column 
-after_care <- output2 |>
-  filter(!requesting_health_code %in% hb_code_list)
+# #filtering for true rogue information in column 
+# rogue_codes <- output |>
+#   filter(!requesting_health_code %in% hb_code_list)
 
 # substituting old GGC code to new one and changing location codes to HB codes 
-after_care_1 <- after_care |> 
+output_final <- output |> 
+  mutate(requesting_health_code = ifelse(requesting_health_code == "S08000031", "S08000021", requesting_health_code)) |> 
+  mutate(requesting_health_code = ifelse(requesting_health_code == "A227V", "S08000015", requesting_health_code)) |> 
+  mutate(requesting_health_code = ifelse(requesting_health_code == "S226H", "S08000024", requesting_health_code)) |> 
+  filter(requesting_health_code %in% hb_code_list)
+
+# filter left over rogue rows 
+rogue_rows <- output |> 
   mutate(requesting_health_code = ifelse(requesting_health_code == "S08000031", "S08000021", requesting_health_code)) |> 
   mutate(requesting_health_code = ifelse(requesting_health_code == "A227V", "S08000015", requesting_health_code)) |> 
   mutate(requesting_health_code = ifelse(requesting_health_code == "S226H", "S08000024", requesting_health_code)) |> 
@@ -141,39 +148,39 @@ writeData(wb, "Rogue_information",
           paste0("Check Column O or N(Request health desc/Request health code) Requesting health board code) do not contain any rogue information"))
 
 writeData(wb, "Rogue_information",
-          x = after_care, startRow = 5)
-
-#write.xlsx(check_2, file = "/PHI_conf/diag_radiology/Data Submissions/Radiology - to be uploaded/A&A/ERROR2_RADIOLOGY_MASTER_A_202410004.csv",
-#               rowNames=FALSE,colNames=FALSE,sep=",",na="",quote=TRUE)
-
-
-# convert dates from nubmber to dates, idetify issues and then convert back to numbers 
-# Convert the column to Date format with the specified format
-
-
+          x = rogue_rows, startRow = 5)
 
 #Date Format, this will not check for errros but will convert dates to what we want.
 #If we want checks this is not good 
 
-date_check2 <- output |> 
+output_final<- output_final |> 
   mutate(request_received_date = ymd(request_received_date)) |> 
-  mutate(request_received_date = gsub("-", "", date_check1$request_received_date))
+  mutate(request_received_date = gsub("-", "", output_final$request_received_date))
 
 #Time Checks
-
-time_check <- date_check2 |> 
+output_final <- output_final |> 
   mutate(request_received_time = format(request_received_time, "%H: %M: %S"))
 
 
 # create a header
-# unsure of HB cypher/today/increment
-fwrite(data.table(t(c("RADIOLOGY","REQUEST",health_board_cypher, today, "1", n))),
-       paste0(output, "EIC_", health_board, "_DATA_", today, "_1.csv"),
+
+
+#### Generating File Header ####
+# header row should say "RADIOLOGY", "REQUEST", "A", "[YYYYMMDD]", "submission n, "[nrow]"
+row_header_request = tibble(
+  title = "RADIOLOGY", "REQUEST", "A", date = date1, "INCREMENT", n_rows = nrow(output))
+
+#### Save out file ####
+fwrite(row_header_request,
+       paste0(error_path, "RADIOLOGY","_REQUEST","_A_", date1, ".csv"),
+       # Start the CSV file with header, no column names
        append = FALSE, col.names = FALSE)
 
-# save out file
-fwrite(save_data, paste0(output, "RADIOLOGY_REQUEST", health_board_cypher, today,".csv"),
+# Add data below header
+fwrite(output_final,
+       paste0(error_path, "RADIOLOGY","_REQUEST","_A_", date1, ".csv"),
        append = TRUE, col.names = TRUE, row.names = FALSE, na = '')
+
 
 ##########################
 
