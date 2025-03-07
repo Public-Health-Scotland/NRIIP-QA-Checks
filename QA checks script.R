@@ -13,14 +13,6 @@
 # -	Save as today’s date and new format 
 # -	Clean column X ( clinical indications ) Remove all nonprintable characters from text 
 # 
-# MASTER
-# -	Unique master ID 
-# -	NO BLANKS – Modality code / description, Room ID (check for room id blanks and booked statuts) , Exam healthboard code, Exam healthboard description, Exam Location Code, Exam location description 
-# -	Date checks 
-# -	Time checks 
-# -	If exam start date is blank use exam end date to populate 
-# -	Check against previous to check number of rows
-# -	save the new file properly 
 # 
 # 
 # write code on checkes for all healthbo
@@ -188,3 +180,54 @@ fwrite(output_final,
 
 saveWorkbook(wb, paste0("/PHI_conf/diag_radiology/Data Submissions/Radiology - to be uploaded/A&A/", "ERROR_RADIOLOGY_MASTER_A_", date1,
                         ".xlsx"))
+
+
+
+# MASTER
+# -	Unique master ID 
+# -	NO BLANKS – Modality code / description, Room ID (check for room id blanks and booked statuts) , Exam healthboard code, Exam healthboard description, Exam Location Code, Exam location description 
+# -	Date checks 
+# -	Time checks 
+# -	If exam start date is blank use exam end date to populate 
+# -	Check against previous to check number of rows
+# -	save the new file properly 
+
+
+master <- read_csv("/PHI_conf/diag_radiology/Data Submissions/Radiology - to be uploaded/A&A/dups.csv", skip = 1)
+master <- clean_names(master)
+
+dup_master_id <- master |> 
+  count(master_id) |> 
+  mutate(dupe_flag = 1)
+  
+data_dupe_raw <- master |> 
+  left_join(dup_master_id) |> 
+  filter(n > 1)
+
+# save out dups 
+addWorksheet(wb, "Master dups")
+writeData(wb, "Master dups", 
+          data_dupe_raw)
+
+# List of master_id values to remove
+remove_ids <- data_dupe_raw$master_id
+
+# Use filter() with case_when() to conditionally remove rows
+hell <- master %>%
+  filter(!(master_id %in% remove_ids))  # Remove rows where master_id is in the remove list
+
+
+# Check for blanks in column O OR N(Request_health_desc/Requesting_health_code) to ensure that there are no blanks.
+check_blanks_master <- master |> 
+  filter(is.na(modality_code) | is.na(modality_description) | is.na(exam_code) | is.na(exam_description) | is.na(room_id) | 
+  is.na(exam_health_board_code) | is.na(exam_health_board_description))
+
+# read in codes to populate empty column
+modality_codes <- read_excel("/PHI_conf/diag_radiology/Data Submissions/Radiology - to be uploaded/A&A/Radiology Reference Information v1.5 - 2024.xlsx",
+                             sheet = "modality", range = "A2:B14")
+
+modality_code_fix <- check_blanks_master |> 
+  mutate(modality_code == )
+
+
+
